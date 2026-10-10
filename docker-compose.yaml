@@ -1,2 +1,45 @@
+# Local setup: one PostgreSQL container + the Spring Boot app.
+#   Start only the database:  docker compose up -d db
+#   Start everything:         docker compose up --build
+#   Reset the database:       docker compose down -v   (deletes the data volume)
+
 services:
-  
+  db:
+    image: postgres:17
+    container_name: recruiter-bot-db
+    environment:
+      POSTGRES_DB: recruiter_bot        # the app's database (Part 1)
+      POSTGRES_USER: recruiter
+      POSTGRES_PASSWORD: recruiter      # local-only credentials
+    ports:
+      - "5433:5432"                     # use "5433:5432" if Postgres already runs on your machine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Scripts mounted here run ONCE, when the data volume is first created.
+      # This one creates and loads the separate hiring_ops database (Part 2).
+      - ./sql-detective/hiring_ops_setup.sql:/docker-entrypoint-initdb.d/01_hiring_ops_setup.sql:ro
+    healthcheck:
+      # -h localhost forces a TCP check, which only succeeds once init scripts
+      # have finished and the real server accepts network connections.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U recruiter -d recruiter_bot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: recruiter-bot-app
+    depends_on:
+      db:
+        condition: service_healthy      # wait until Postgres accepts connections
+    environment:
+      # Spring Boot maps these onto spring.datasource.* and they override
+      # application.properties: inside Docker the database host is "db", not localhost.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/recruiter_bot
+      SPRING_DATASOURCE_USERNAME: recruiter
+      SPRING_DATASOURCE_PASSWORD: recruiter
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
