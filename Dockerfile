@@ -6,7 +6,7 @@ WORKDIR /app
 # own layer, so they're cached and not re-downloaded on every code change.
 COPY mvnw pom.xml ./
 COPY .mvn .mvn
-RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
+RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && ./mvnw dependency:go-offline -B
 
 COPY src src
 # -DskipTests: the generated contextLoads() test needs a running database,
